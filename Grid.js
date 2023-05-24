@@ -18,7 +18,23 @@ export default class Grid{
             )
         })
 
-        console.log(this.#cells)
+        // console.log(this.#cells)
+    }
+
+    get cellsByColumn() {
+        return this.#cells.reduce((cellGrid, cell) => {
+            cellGrid[cell.x] = cellGrid[cell.x] || []
+            cellGrid[cell.x][cell.y] = cell
+            return cellGrid
+        }, [])
+    }
+
+    get cellsByRow() {
+        return this.#cells.reduce((cellGrid, cell) => {
+            cellGrid[cell.y] = cellGrid[cell.y] || []
+            cellGrid[cell.y][cell.x] = cell
+            return cellGrid
+        }, [])
     }
 
     get #emptyCells() {
@@ -29,6 +45,7 @@ export default class Grid{
         const randomIndex = Math.floor(Math.random() * this.#emptyCells.length)
         return this.#emptyCells[randomIndex]
     }
+
 }
 
 class Cell{
@@ -36,6 +53,7 @@ class Cell{
     #x
     #y
     #tile
+    #mergeTile
 
     constructor(cellElement, x, y) {
         this.#cellElement = cellElement
@@ -52,6 +70,32 @@ class Cell{
         if(value == null) return
         this.#tile.x = this.#x
         this.#tile.y = this.#y
+    }
+
+    get x() {
+        return this.#x
+    }
+
+    get y() {
+        return this.#y
+    }
+
+    canAccept(tile) {
+        return (
+            this.tile == null || 
+            (this.mergeTile == null && this.tile.value === tile.value)
+        )
+    }
+
+    get mergeTile() {
+        return this.#mergeTile
+    }
+
+    set mergeTile(value) {
+        this.#mergeTile = value
+        if(value == null) return
+        this.#mergeTile.x = this.#x
+        this.#mergeTile.y = this.#y
     }
 }
 

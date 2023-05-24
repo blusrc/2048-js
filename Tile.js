@@ -10,7 +10,7 @@ export default class Tile {
         tileContainer.append(this.#tileElement)
         this.value = value
 
-        console.log(this.#tileElement)
+        // console.log(this.#tileElement)
     }
 
     set value(val) {
