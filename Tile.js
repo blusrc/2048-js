@@ -20,8 +20,8 @@ export default class Tile {
       num2 = 4;
     }
 
-    console.log(num1);
-    console.log(num2);
+    // console.log(num1);
+    // console.log(num2);
 
     let val = Math.random() > 0.1 ? num1 : num2;
     this.#tileElement = document.createElement("div");
@@ -34,6 +34,17 @@ export default class Tile {
 
   get value() {
     return this.#value;
+  }
+
+  clone() {
+    const clonedTile = new Tile(null, null);
+
+    clonedTile.#tileElement = this.#tileElement.cloneNode();
+    clonedTile.#x = this.#x;
+    clonedTile.#y = this.#y;
+    clonedTile.#value = this.#value;
+
+    return clonedTile;
   }
 
   set value(val) {
@@ -71,5 +82,12 @@ export default class Tile {
         once: true,
       });
     });
+  }
+  get x() {
+    return this.#x;
+  }
+
+  get y() {
+    return this.#y;
   }
 }

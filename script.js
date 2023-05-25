@@ -1,34 +1,82 @@
 import Grid from "./Grid.js";
 import Tile from "./Tile.js";
+import InvalidMoveError from "./InvalidMoveError.js";
 
-const difficulty = 1;
+import AI from "./AI.js";
+
+const outputBox = document.getElementById("diff-output");
+const diffDialog = document.getElementById("diff-dialog");
+const selectEl = diffDialog.querySelector("select");
+const confirmBtn = diffDialog.querySelector("#confirmBtn");
+
+let difficulty;
+diffDialog.showModal();
+
+// "Favorite animal" input sets the value of the submit button
+selectEl.addEventListener("change", (e) => {
+  confirmBtn.value = selectEl.value;
+});
+
+// "Cancel" button closes the dialog without submitting because of [formmethod="dialog"], triggering a close event.
+diffDialog.addEventListener("close", (e) => {
+  console.log("close triggered");
+  console.log("return Value " + diffDialog.returnValue);
+  outputBox.value = diffDialog.returnValue;
+
+  difficulty =
+    diffDialog.returnValue === "default" ? 0 : parseInt(diffDialog.returnValue);
+  console.log("final diff: " + difficulty);
+  setupGame();
+  // === "default"
+  //   ? "No return value."
+  //   : `ReturnValue: ${diffDialog.returnValue}.`; // Have to check for "default" rather than empty string
+});
+
+// Prevent the "confirm" button from the default behavior of submitting the form, and close the dialog with the `close()` method, which triggers the "close" event.
+confirmBtn.addEventListener("click", (event) => {
+  event.preventDefault(); // We don't want to submit this fake form
+  diffDialog.close(selectEl.value); // Have to send the select box value here.
+});
 
 const gameBoard = document.getElementById("game-board");
+const scoreCount = document.getElementById("score-count");
+const timerElement = document.getElementById("timer");
+
 const gameEnd = document.getElementById("game-end-scene");
 const gameEndTitle = document.getElementById("game-end-title");
-const scoreCount = document.getElementById("score-count");
 const gameEndCloseBtn = document.getElementById("close-game-end-scene");
 const gameEndScoreCount = document.getElementById("game-end-score");
 const gameEndTimer = document.getElementById("game-end-timer");
-const timerElement = document.getElementById("timer");
 
-// GAME SETUP
+const botButton = document.getElementById("bot-button");
+botButton.addEventListener("click", handleBotButtonClick);
 
 let startTime;
 let elapsedSeconds = 0;
 let timerGlob = "";
 let idle = true;
 
-// testing modal
-// gameEnd.showModal();
+console.log(difficulty);
 
-const grid = new Grid(gameBoard, difficulty);
-grid.randomEmptyCell().tile = new Tile(gameBoard, difficulty);
-grid.randomEmptyCell().tile = new Tile(gameBoard, difficulty);
+let grid;
 
-setupInput();
+function setupGame() {
+  if (difficulty != null) {
+    // GAME SETUP
 
-// HELPER FUNCTIONS
+    // testing modal
+    // gameEnd.showModal();
+
+    grid = new Grid(gameBoard, difficulty);
+    grid.randomEmptyCell().tile = new Tile(gameBoard, difficulty);
+    grid.randomEmptyCell().tile = new Tile(gameBoard, difficulty);
+
+    // const ai = new AI(grid);
+    setupInput();
+
+    // HELPER FUNCTIONS
+  }
+}
 
 function setupInput() {
   window.addEventListener("keydown", handleInput, { once: true });
@@ -40,43 +88,18 @@ gameEndCloseBtn.addEventListener("click", () => {
 });
 
 async function handleInput(e) {
-  switch (e.key) {
-    case "ArrowUp":
-      if (!canMoveUp()) {
-        setupInput();
-        return;
-      }
-      await moveUp();
-      break;
-    case "ArrowDown":
-      if (!canMoveDown()) {
-        setupInput();
-        return;
-      }
-      await moveDown();
-      break;
-    case "ArrowLeft":
-      if (!canMoveLeft()) {
-        setupInput();
-        return;
-      }
-      await moveLeft();
-      break;
-    case "ArrowRight":
-      if (!canMoveRight()) {
-        setupInput();
-        return;
-      }
-      await moveRight();
-      break;
-    default:
-      setupInput();
+  try {
+    grid.moveTiles(e.key);
+  } catch (e) {
+    if (e instanceof InvalidMoveError) {
+      if (grid.canMoveTilesAnyDirection()) setupInput();
       return;
+    }
+    throw e;
   }
 
   // start timer after first key input
   if (idle) {
-    console.log("start");
     idle = !idle;
     startTimer();
   }
@@ -89,103 +112,47 @@ async function handleInput(e) {
   const newTile = new Tile(gameBoard, difficulty);
   grid.randomEmptyCell().tile = newTile;
 
-  if (!canMoveUp() && !canMoveDown() && !canMoveRight() && !canMoveLeft()) {
-    console.log("lost");
-    idle = !idle;
-    gameEndTitle.textContent = "Game over! 🥲";
-    gameEndScoreCount.textContent = grid.score;
-    gameEndTimer.textContent = timerGlob;
-    gameEnd.showModal();
+  // Check if the game is lost or won
+  if (grid.isLose()) {
+    endGame("Game over! 🥲");
     return;
   }
 
-  if (grid.maxPoint === 2048) {
-    idle = !idle;
-    gameEndTitle.textContent = "Victory! 🏆";
-    gameEndScoreCount.textContent = grid.score;
-    gameEndTimer.textContent = timerGlob;
-    gameEnd.showModal();
+  if (grid.isWin()) {
+    endGame("Victory! 🏆");
+    return;
   }
-
   setupInput();
-}
-
-function moveUp() {
-  return slideTiles(grid.cellsByColumn);
-}
-
-function moveDown() {
-  return slideTiles(grid.cellsByColumn.map((column) => [...column].reverse()));
-}
-
-function moveLeft() {
-  return slideTiles(grid.cellsByRow);
-}
-
-function moveRight() {
-  return slideTiles(grid.cellsByRow.map((row) => [...row].reverse()));
-}
-
-function slideTiles(cells) {
-  return Promise.all(
-    cells.flatMap((group) => {
-      const promises = [];
-      for (let i = 1; i < group.length; i++) {
-        const cell = group[i];
-
-        if (cell.tile == null) continue;
-
-        let lastValidCell;
-
-        for (let j = i - 1; j >= 0; j--) {
-          const moveToCell = group[j];
-          if (!moveToCell.canAccept(cell.tile)) break;
-          lastValidCell = moveToCell;
-        }
-
-        if (lastValidCell != null) {
-          promises.push(cell.tile.waitForTransition());
-          if (lastValidCell.tile != null) {
-            lastValidCell.mergeTile = cell.tile;
-          } else {
-            lastValidCell.tile = cell.tile;
-          }
-          cell.tile = null;
-        }
-      }
-
-      return promises;
-    })
-  );
-}
-
-function canMoveUp() {
-  return canMove(grid.cellsByColumn);
-}
-function canMoveDown() {
-  return canMove(grid.cellsByColumn.map((col) => [...col].reverse()));
-}
-function canMoveLeft() {
-  return canMove(grid.cellsByRow);
-}
-function canMoveRight() {
-  return canMove(grid.cellsByRow.map((row) => [...row].reverse()));
-}
-
-function canMove(cells) {
-  return cells.some((group) => {
-    return group.some((cell, index) => {
-      if (index === 0) return false;
-      if (cell.tile == null) return false;
-      const moveToCell = group[index - 1];
-      return moveToCell.canAccept(cell.tile);
-    });
-  });
 }
 
 function startTimer() {
   startTime = Date.now();
   updateTimer();
+}
+
+function handleBotButtonClick() {
+  // Disable the bot button to prevent multiple clicks
+  botButton.disabled = true;
+
+  // Start the timer
+  if (idle) {
+    idle = !idle;
+    startTimer();
+  }
+
+  // Play AI moves
+  playAI();
+}
+
+function endGame(message) {
+  // Stop the timer
+  idle = true;
+
+  // Show the game end modal with the appropriate message and details
+  gameEndTitle.textContent = message;
+  gameEndScoreCount.textContent = grid.score;
+  gameEndTimer.textContent = timerGlob;
+  gameEnd.showModal();
 }
 
 function updateTimer() {
@@ -197,7 +164,7 @@ function updateTimer() {
   timerElement.textContent = formatTime(elapsedSeconds);
   timerGlob = timerElement.textContent;
 
-  console.log(elapsedSeconds);
+  // console.log(elapsedSeconds);
 
   // Schedule the next update
   if (idle === false) requestAnimationFrame(updateTimer);
@@ -209,184 +176,50 @@ function formatTime(seconds) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 }
 
-// BOT
+async function playAI() {
+  // Get the AI's next move
+  // const nextMove = ai.getBest(gameBoard, difficulty);
 
-class AI {
-  constructor(grid) {
-    this.grid = grid;
-  }
-  // static evaluation function
-  eval() {
-    var emptyCells = this.grid.emptyCells().length;
+  const moves = ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"];
+  const nextMove = moves[Math.floor(Math.random() * moves.length)];
 
-    var smoothWeight = 0.1,
-      //monoWeight   = 0.0,
-      //islandWeight = 0.0,
-      mono2Weight = 1.0,
-      emptyWeight = 2.7,
-      maxWeight = 1.0;
+  // I tried to add the AI model to this app but I couldn't make it work,
+  // So let's enjoy just some randomness
 
-    return (
-      this.grid.smoothness() * smoothWeight +
-      //+ this.grid.monotonicity() * monoWeight
-      //- this.grid.islands() * islandWeight
-      this.grid.monotonicity2() * mono2Weight +
-      Math.log(emptyCells) * emptyWeight +
-      this.grid.maxValue() * maxWeight
-    );
-  }
-  // alpha-beta depth first search
-  search(depth, alpha, beta, positions, cutoffs) {
-    var bestScore;
-    var bestMove = -1;
-    var result;
-
-    // the maxing player
-    if (this.grid.playerTurn) {
-      bestScore = alpha;
-      for (var direction in [0, 1, 2, 3]) {
-        var newGrid = this.grid.clone();
-        if (newGrid.move(direction).moved) {
-          positions++;
-          if (newGrid.isWin()) {
-            return {
-              move: direction,
-              score: 10000,
-              positions: positions,
-              cutoffs: cutoffs,
-            };
-          }
-          var newAI = new AI(newGrid);
-
-          if (depth == 0) {
-            result = { move: direction, score: newAI.eval() };
-          } else {
-            result = newAI.search(
-              depth - 1,
-              bestScore,
-              beta,
-              positions,
-              cutoffs
-            );
-            if (result.score > 9900) {
-              // win
-              result.score--; // to slightly penalize higher depth from win
-            }
-            positions = result.positions;
-            cutoffs = result.cutoffs;
-          }
-
-          if (result.score > bestScore) {
-            bestScore = result.score;
-            bestMove = direction;
-          }
-          if (bestScore > beta) {
-            cutoffs++;
-            return {
-              move: bestMove,
-              score: beta,
-              positions: positions,
-              cutoffs: cutoffs,
-            };
-          }
-        }
-      }
-    } else {
-      // computer's turn, we'll do heavy pruning to keep the branching factor low
-      bestScore = beta;
-
-      // try a 2 and 4 in each cell and measure how annoying it is
-      // with metrics from eval
-      var candidates = [];
-      var cells = this.grid.emptyCells();
-      var scores = { 2: [], 4: [] };
-      for (var value in scores) {
-        for (var i in cells) {
-          scores[value].push(null);
-          var cell = cells[i];
-          var tile = new Tile(cell, parseInt(value, 10));
-          this.grid.insertTile(tile);
-          scores[value][i] = -this.grid.smoothness() + this.grid.islands();
-          this.grid.removeTile(cell);
-        }
-      }
-
-      // now just pick out the most annoying moves
-      var maxScore = Math.max(
-        Math.max.apply(null, scores[2]),
-        Math.max.apply(null, scores[4])
-      );
-      for (var value in scores) {
-        // 2 and 4
-        for (var i = 0; i < scores[value].length; i++) {
-          if (scores[value][i] == maxScore) {
-            candidates.push({ position: cells[i], value: parseInt(value, 10) });
-          }
-        }
-      }
-
-      // search on each candidate
-      for (var i = 0; i < candidates.length; i++) {
-        var position = candidates[i].position;
-        var value = candidates[i].value;
-        var newGrid = this.grid.clone();
-        var tile = new Tile(position, value);
-        newGrid.insertTile(tile);
-        newGrid.playerTurn = true;
-        positions++;
-        newAI = new AI(newGrid);
-        result = newAI.search(depth, alpha, bestScore, positions, cutoffs);
-        positions = result.positions;
-        cutoffs = result.cutoffs;
-
-        if (result.score < bestScore) {
-          bestScore = result.score;
-        }
-        if (bestScore < alpha) {
-          cutoffs++;
-          return {
-            move: null,
-            score: alpha,
-            positions: positions,
-            cutoffs: cutoffs,
-          };
-        }
-      }
-    }
-
-    return {
-      move: bestMove,
-      score: bestScore,
-      positions: positions,
-      cutoffs: cutoffs,
-    };
-  }
-  // performs a search and returns the best move
-  getBest() {
-    return this.iterativeDeep();
-  }
-  // performs iterative deepening over the alpha-beta search
-  iterativeDeep() {
-    var start = new Date().getTime();
-    var depth = 0;
-    var best;
-    do {
-      var newBest = this.search(depth, -10000, 10000, 0, 0);
-      if (newBest.move == -1) {
-        break;
+  // Move the tiles based on the AI's decision
+  try {
+    grid.moveTiles(nextMove);
+  } catch (e) {
+    if (e instanceof InvalidMoveError) {
+      if (grid.canMoveTilesAnyDirection()) {
+        // If the AI's move was invalid but there are still valid moves, continue playing
+        setTimeout(playAI, 500); // Delay between AI moves (adjust as needed)
       } else {
-        best = newBest;
+        // If there are no valid moves left, end the game
+        endGame();
       }
-      depth++;
-    } while (new Date().getTime() - start < minSearchTime);
-    return best;
+      return;
+    }
+    throw e;
   }
-  translate(move) {
-    return {
-      0: "up",
-      1: "right",
-      2: "down",
-      3: "left",
-    }[move];
+
+  // Update the grid and perform necessary actions
+  grid.cells.forEach((cell) => cell.mergeTiles(grid));
+  scoreCount.textContent = grid.score;
+  const newTile = new Tile(gameBoard, difficulty);
+  grid.randomEmptyCell().tile = newTile;
+
+  // Check if the game is lost or won
+  if (grid.isLose()) {
+    endGame("Game over! 🥲");
+    return;
   }
+
+  if (grid.isWin()) {
+    endGame("Victory! 🏆");
+    return;
+  }
+
+  // Continue playing AI moves
+  setTimeout(playAI, 500); // Delay between AI moves (adjust as needed)
 }

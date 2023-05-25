@@ -15,19 +15,45 @@
       rel="stylesheet"
       href="styles.css"
     />
-    <script
-      src="script.js"
-      type="module"
-    ></script>
   </head>
 
   <body>
+    <!-- A modal dialog containing a form -->
+    <dialog id="diff-dialog">
+      <form>
+        <p>
+          <label
+            >Difficulty:
+            <select>
+              <option value="default">0</option>
+              <option>1</option>
+              <option>2</option>
+            </select>
+          </label>
+        </p>
+        <p></p>
+        <div>
+          <button
+            id="confirmBtn"
+            value="default"
+          >
+            Confirm
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <header>
       <h1>2048</h1>
       <div>
         <h3>Score</h3>
         <span id="score-count">0</span>
       </div>
+      <div>
+        <h3>Difficulty</h3>
+        <span id="diff-output">0</span>
+      </div>
+
       <div>
         <h3>Time</h3>
         <span id="timer">0:00</span>
@@ -41,7 +67,7 @@
 
   <dialog id="game-end-scene">
     <h1>2048</h1>
-    <h2 id="game-end-title">Game over!</h1>
+    <h2 id="game-end-title">Game over!</h2>
     <div class="modal-scores">
       <div>
         <h3>📊 Score</h3>
@@ -56,4 +82,9 @@
       <button id="close-game-end-scene">❌ Close</button>
     </div>
   </dialog>
+
+  <script
+    src="script.js"
+    type="module"
+  ></script>
 </html>

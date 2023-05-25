@@ -106,7 +106,7 @@ header > * {
   }
 }
 
-#game-end-scene {
+dialog {
   background-color: #333;
   color: #fafafa;
   border: none;
@@ -115,7 +115,7 @@ header > * {
   gap: 4vmin;
 }
 
-#game-end-scene > h1 {
+dialog > h1 {
   font-size: 6vmin;
 }
 
@@ -126,7 +126,9 @@ header > * {
   justify-content: space-between;
 }
 
-#close-game-end-scene {
+dialog > * > * > button,
+dialog > * > button,
+dialog > button {
   margin-top: 4vmin;
   padding: 2vmin 6vmin;
   font-size: 3vmin;

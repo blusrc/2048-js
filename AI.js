@@ -1,41 +1,49 @@
-// BOT
+import Tile from "./Tile.js";
 
-class AI {
+export default class AI {
+  #grid;
+
   constructor(grid) {
-    this.grid = grid;
+    this.#grid = grid;
   }
-  // static evaluation function
+
   eval() {
-    var emptyCells = this.grid.emptyCells().length;
+    var emptyCells = this.grid.emptyCells.length;
 
     var smoothWeight = 0.1,
-      //monoWeight   = 0.0,
-      //islandWeight = 0.0,
       mono2Weight = 1.0,
       emptyWeight = 2.7,
       maxWeight = 1.0;
 
     return (
       this.grid.smoothness() * smoothWeight +
-      //+ this.grid.monotonicity() * monoWeight
-      //- this.grid.islands() * islandWeight
-      this.grid.monotonicity2() * mono2Weight +
+      this.grid.monotonicity() * mono2Weight +
       Math.log(emptyCells) * emptyWeight +
-      this.grid.maxValue() * maxWeight
+      this.grid.maxPoint * maxWeight
     );
   }
-  // alpha-beta depth first search
-  search(depth, alpha, beta, positions, cutoffs) {
+
+  get grid() {
+    return this.#grid;
+  }
+
+  set grid(val) {
+    this.#grid = val;
+  }
+
+  search(depth, alpha, beta, positions, cutoffs, grid, diff) {
     var bestScore;
     var bestMove = -1;
     var result;
 
-    // the maxing player
     if (this.grid.playerTurn) {
       bestScore = alpha;
-      for (var direction in [0, 1, 2, 3]) {
-        var newGrid = this.grid.clone();
-        if (newGrid.move(direction).moved) {
+      for (var direction of [0, 1, 2, 3]) {
+        direction = this.translate(direction);
+        console.log("finding best: " + direction);
+        var newGrid = this.grid.clone(grid, diff);
+        if (newGrid.canMove(direction)) {
+          newGrid.moveTiles(direction);
           positions++;
           if (newGrid.isWin()) {
             return {
@@ -47,7 +55,7 @@ class AI {
           }
           var newAI = new AI(newGrid);
 
-          if (depth == 0) {
+          if (depth === 0) {
             result = { move: direction, score: newAI.eval() };
           } else {
             result = newAI.search(
@@ -55,10 +63,11 @@ class AI {
               bestScore,
               beta,
               positions,
-              cutoffs
+              cutoffs,
+              grid,
+              diff
             );
             if (result.score > 9900) {
-              // win
               result.score--; // to slightly penalize higher depth from win
             }
             positions = result.positions;
@@ -81,16 +90,12 @@ class AI {
         }
       }
     } else {
-      // computer's turn, we'll do heavy pruning to keep the branching factor low
       bestScore = beta;
-
-      // try a 2 and 4 in each cell and measure how annoying it is
-      // with metrics from eval
       var candidates = [];
       var cells = this.grid.emptyCells();
       var scores = { 2: [], 4: [] };
       for (var value in scores) {
-        for (var i in cells) {
+        for (var i = 0; i < cells.length; i++) {
           scores[value].push(null);
           var cell = cells[i];
           var tile = new Tile(cell, parseInt(value, 10));
@@ -100,13 +105,8 @@ class AI {
         }
       }
 
-      // now just pick out the most annoying moves
-      var maxScore = Math.max(
-        Math.max.apply(null, scores[2]),
-        Math.max.apply(null, scores[4])
-      );
+      var maxScore = Math.max(Math.max(...scores[2]), Math.max(...scores[4]));
       for (var value in scores) {
-        // 2 and 4
         for (var i = 0; i < scores[value].length; i++) {
           if (scores[value][i] == maxScore) {
             candidates.push({ position: cells[i], value: parseInt(value, 10) });
@@ -114,13 +114,12 @@ class AI {
         }
       }
 
-      // search on each candidate
       for (var i = 0; i < candidates.length; i++) {
         var position = candidates[i].position;
         var value = candidates[i].value;
-        var newGrid = this.grid.clone();
-        var tile = new Tile(position, value);
-        newGrid.insertTile(tile);
+        var newGrid = this.#grid.clone();
+        var tile = new Tile(grid, diff);
+        newGrid.randomEmptyCell = Tile;
         newGrid.playerTurn = true;
         positions++;
         newAI = new AI(newGrid);
@@ -150,32 +149,47 @@ class AI {
       cutoffs: cutoffs,
     };
   }
-  // performs a search and returns the best move
-  getBest() {
-    return this.iterativeDeep();
+
+  getBest(grid, diff) {
+    const bestMove = this.iterativeDeep(grid, diff);
+    console.log(bestMove);
+
+    // const res = this.translate(bestMove.move);
+    // console.log(res);
+    return bestMove + "";
   }
-  // performs iterative deepening over the alpha-beta search
-  iterativeDeep() {
+
+  iterativeDeep(grid, diff) {
     var start = new Date().getTime();
     var depth = 0;
     var best;
     do {
-      var newBest = this.search(depth, -10000, 10000, 0, 0);
-      if (newBest.move == -1) {
+      var newBest = this.search(depth, -10000, 10000, 0, 0, grid, diff);
+      if (newBest.move === -1) {
         break;
       } else {
         best = newBest;
       }
       depth++;
-    } while (new Date().getTime() - start < minSearchTime);
+    } while (new Date().getTime() - start < 100);
     return best;
   }
+
   translate(move) {
     return {
-      0: "up",
-      1: "right",
-      2: "down",
-      3: "left",
+      0: "ArrowUp",
+      1: "ArrowRight",
+      2: "ArrowDown",
+      3: "ArrowLeft",
+    }[move];
+  }
+
+  translateback(move) {
+    return {
+      ArrowUp: 0,
+      ArrowRight: 1,
+      ArrowDown: 2,
+      ArrowLeft: 3,
     }[move];
   }
 }
