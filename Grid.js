@@ -6,6 +6,9 @@ export default class Grid {
   #cells;
   #score;
   #maxPoint;
+  #size;
+  #startTiles;
+  playerTurn;
 
   constructor(
     gridElem,
@@ -20,11 +23,22 @@ export default class Grid {
     gridElem.style.setProperty("--grid-size", gridSize);
     gridElem.style.setProperty("--cell-size", `${cellSize}vmin`);
     gridElem.style.setProperty("--cell-gap", `${cellGap}vmin`);
+
     this.#cells = createCellElements(gridElem, gridSize).map((cell, index) => {
       return new Cell(cell, index % gridSize, Math.floor(index / gridSize));
     });
+
+    this.#size = gridSize;
+    this.#startTiles = 2;
+
     this.#score = 0;
     this.#maxPoint = 0;
+
+    this.playerTurn = true;
+  }
+
+  get size() {
+    return this.#size;
   }
 
   get maxPoint() {
@@ -63,12 +77,12 @@ export default class Grid {
     }, []);
   }
 
-  get #emptyCells() {
+  get emptyCells() {
     return this.#cells.filter((cell) => cell.tile == null);
   }
 
   randomEmptyCell() {
-    const randomIndex = Math.floor(Math.random() * this.#emptyCells.length);
+    const randomIndex = Math.floor(Math.random() * this.emptyCells.length);
     return this.#emptyCells[randomIndex];
   }
 }
