@@ -11,10 +11,6 @@
       content="width=device-width, initial-scale=1.0"
     />
     <title>n! - 2048</title>
-    <link
-      rel="stylesheet"
-      href="styles.css"
-    />
   </head>
 
   <body>
@@ -83,8 +79,1011 @@
     </div>
   </dialog>
 
-  <script
-    src="script.js"
-    type="module"
-  ></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    body {
+      background-color: #333;
+      display: flex;
+      justify-content: center;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      max-height: 100vh;
+      margin: 0;
+      gap: 2vmin;
+      color: #eee;
+      font-size: 2vmin;
+      width: min-content;
+      margin: 0 auto;
+    }
+
+    button {
+      height: 100%;
+      padding: 0 2vmin;
+      font-size: 1.5vmin;
+      font-weight: bold;
+      border: none;
+      border-radius: 1vmin;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      align-items: end;
+    }
+
+    header > h1 {
+      font-size: 7vmin;
+    }
+    header > div > h3 {
+      font-size: 3vmin;
+    }
+
+    header > div {
+      display: flex;
+      flex-direction: column;
+      gap: 1vmin;
+    }
+
+    #bot-button {
+      padding: 1vmin;
+      font-size: 3vmin;
+    }
+
+    header > * > *,
+    header > * {
+      margin: 0;
+    }
+
+    #game-board {
+      font-size: 7.5vmin;
+      display: grid;
+      grid-template-columns: repeat(var(--grid-size), var(--cell-size));
+      grid-template-rows: repeat(var(--grid-size), var(--cell-size));
+      gap: var(--cell-gap);
+      padding: var(--cell-gap);
+
+      background-color: #ccc;
+      border-radius: 1vmin;
+
+      position: relative;
+    }
+
+    .cell {
+      background-color: #aaa;
+      border-radius: 1vmin;
+    }
+
+    .tile {
+      position: absolute;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: var(--cell-size);
+      height: var(--cell-size);
+      border-radius: 1vmin;
+
+      top: calc(
+        var(--y) * (var(--cell-size) + var(--cell-gap)) + var(--cell-gap)
+      );
+      left: calc(
+        var(--x) * (var(--cell-size) + var(--cell-gap)) + var(--cell-gap)
+      );
+      font-weight: bold;
+
+      background-color: hsl(100, 50%, var(--background-lightness));
+      color: hsl(100, 25%, var(--text-lightness));
+
+      animation: show 200ms ease-in-out;
+      transition: 100ms ease-in-out;
+    }
+
+    @keyframes show {
+      0% {
+        opacity: 0.5;
+        transform: scale(0);
+      }
+    }
+
+    dialog {
+      background-color: #333;
+      color: #fafafa;
+      border: none;
+      padding: 10vmin;
+      border-radius: 2vmin;
+      gap: 4vmin;
+    }
+
+    dialog > h1 {
+      font-size: 6vmin;
+    }
+
+    .modal-scores {
+      display: flex;
+      width: 100%;
+      gap: 10vmin;
+      justify-content: space-between;
+    }
+
+    dialog > * > * > button,
+    dialog > * > button,
+    dialog > button {
+      margin-top: 4vmin;
+      padding: 2vmin 6vmin;
+      font-size: 3vmin;
+    }
+  </style>
+
+  <script>
+    const DEFAULT_GRID_SIZE = 4;
+    const DEFAULT_CELL_SIZE = 19;
+    const DEFAULT_CELL_GAP = 2;
+
+    const outputBox = document.getElementById("diff-output");
+    const diffDialog = document.getElementById("diff-dialog");
+    const selectEl = diffDialog.querySelector("select");
+    const confirmBtn = diffDialog.querySelector("#confirmBtn");
+
+    let difficulty;
+    diffDialog.showModal();
+
+    // "Favorite animal" input sets the value of the submit button
+    selectEl.addEventListener("change", (e) => {
+      confirmBtn.value = selectEl.value;
+    });
+
+    // "Cancel" button closes the dialog without submitting because of [formmethod="dialog"], triggering a close event.
+    diffDialog.addEventListener("close", (e) => {
+      console.log("close triggered");
+      console.log("return Value " + diffDialog.returnValue);
+      outputBox.value = diffDialog.returnValue;
+
+      difficulty =
+        diffDialog.returnValue === "default"
+          ? 0
+          : parseInt(diffDialog.returnValue);
+      console.log("final diff: " + difficulty);
+      setupGame();
+      // === "default"
+      //   ? "No return value."
+      //   : `ReturnValue: ${diffDialog.returnValue}.`; // Have to check for "default" rather than empty string
+    });
+
+    // Prevent the "confirm" button from the default behavior of submitting the form, and close the dialog with the `close()` method, which triggers the "close" event.
+    confirmBtn.addEventListener("click", (event) => {
+      event.preventDefault(); // We don't want to submit this fake form
+      diffDialog.close(selectEl.value); // Have to send the select box value here.
+    });
+
+    const gameBoard = document.getElementById("game-board");
+    const scoreCount = document.getElementById("score-count");
+    const timerElement = document.getElementById("timer");
+
+    const gameEnd = document.getElementById("game-end-scene");
+    const gameEndTitle = document.getElementById("game-end-title");
+    const gameEndCloseBtn = document.getElementById("close-game-end-scene");
+    const gameEndScoreCount = document.getElementById("game-end-score");
+    const gameEndTimer = document.getElementById("game-end-timer");
+
+    const botButton = document.getElementById("bot-button");
+    botButton.addEventListener("click", handleBotButtonClick);
+
+    let startTime;
+    let elapsedSeconds = 0;
+    let timerGlob = "";
+    let idle = true;
+
+    console.log(difficulty);
+
+    let grid;
+
+    function setupGame() {
+      if (difficulty != null) {
+        // GAME SETUP
+
+        // testing modal
+        // gameEnd.showModal();
+
+        grid = new Grid(gameBoard, difficulty);
+        grid.randomEmptyCell().tile = new Tile(gameBoard, difficulty);
+        grid.randomEmptyCell().tile = new Tile(gameBoard, difficulty);
+
+        // const ai = new AI(grid);
+        setupInput();
+
+        // HELPER FUNCTIONS
+      }
+    }
+
+    function setupInput() {
+      window.addEventListener("keydown", handleInput, { once: true });
+    }
+
+    gameEndCloseBtn.addEventListener("click", () => {
+      console.log("closing modal");
+      gameEnd.close();
+    });
+
+    async function handleInput(e) {
+      try {
+        grid.moveTiles(e.key);
+      } catch (e) {
+        if (e instanceof InvalidMoveError) {
+          if (grid.canMoveTilesAnyDirection()) setupInput();
+          return;
+        }
+        throw e;
+      }
+
+      // start timer after first key input
+      if (idle) {
+        idle = !idle;
+        startTimer();
+      }
+
+      grid.cells.forEach((cell) => cell.mergeTiles(grid));
+
+      //   console.log(grid.score);
+      scoreCount.textContent = grid.score;
+
+      const newTile = new Tile(gameBoard, difficulty);
+      grid.randomEmptyCell().tile = newTile;
+
+      // Check if the game is lost or won
+      if (grid.isLose()) {
+        endGame("Game over! 🥲");
+        return;
+      }
+
+      if (grid.isWin()) {
+        endGame("Victory! 🏆");
+        return;
+      }
+      setupInput();
+    }
+
+    function startTimer() {
+      startTime = Date.now();
+      updateTimer();
+    }
+
+    function handleBotButtonClick() {
+      // Disable the bot button to prevent multiple clicks
+      botButton.disabled = true;
+
+      // Start the timer
+      if (idle) {
+        idle = !idle;
+        startTimer();
+      }
+
+      // Play AI moves
+      playAI();
+    }
+
+    function endGame(message) {
+      // Stop the timer
+      idle = true;
+
+      // Show the game end modal with the appropriate message and details
+      gameEndTitle.textContent = message;
+      gameEndScoreCount.textContent = grid.score;
+      gameEndTimer.textContent = timerGlob;
+      gameEnd.showModal();
+    }
+
+    function updateTimer() {
+      const currentTime = Date.now();
+      const elapsedMilliseconds = currentTime - startTime;
+      elapsedSeconds = Math.floor(elapsedMilliseconds / 1000);
+
+      // Update the timer element with the elapsed time
+      timerElement.textContent = formatTime(elapsedSeconds);
+      timerGlob = timerElement.textContent;
+
+      // console.log(elapsedSeconds);
+
+      // Schedule the next update
+      if (idle === false) requestAnimationFrame(updateTimer);
+    }
+
+    function formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+    }
+
+    async function playAI() {
+      // Get the AI's next move
+      // const nextMove = ai.getBest(gameBoard, difficulty);
+
+      const moves = ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft"];
+      const nextMove = moves[Math.floor(Math.random() * moves.length)];
+
+      // I tried to add the AI model to this app but I couldn't make it work,
+      // So let's enjoy just some randomness
+
+      // Move the tiles based on the AI's decision
+      try {
+        grid.moveTiles(nextMove);
+      } catch (e) {
+        if (e instanceof InvalidMoveError) {
+          if (grid.canMoveTilesAnyDirection()) {
+            // If the AI's move was invalid but there are still valid moves, continue playing
+            setTimeout(playAI, 500); // Delay between AI moves (adjust as needed)
+          } else {
+            // If there are no valid moves left, end the game
+            endGame();
+          }
+          return;
+        }
+        throw e;
+      }
+
+      // Update the grid and perform necessary actions
+      grid.cells.forEach((cell) => cell.mergeTiles(grid));
+      scoreCount.textContent = grid.score;
+      const newTile = new Tile(gameBoard, difficulty);
+      grid.randomEmptyCell().tile = newTile;
+
+      // Check if the game is lost or won
+      if (grid.isLose()) {
+        endGame("Game over! 🥲");
+        return;
+      }
+
+      if (grid.isWin()) {
+        endGame("Victory! 🏆");
+        return;
+      }
+
+      // Continue playing AI moves
+      setTimeout(playAI, 500); // Delay between AI moves (adjust as needed)
+    }
+
+    class Grid {
+      #cells;
+      #score;
+      #maxPoint;
+      #size;
+      #startTiles;
+      #playerTurn;
+
+      constructor(
+        gridElem,
+        diff,
+        {
+          gridSize = diff === 0 ? DEFAULT_GRID_SIZE + 2 : DEFAULT_GRID_SIZE,
+          cellSize = diff === 0 ? DEFAULT_CELL_SIZE - 6 : DEFAULT_CELL_SIZE,
+          cellGap = DEFAULT_CELL_GAP,
+        } = {}
+      ) {
+        gridElem.innerHTML = "";
+        gridElem.style.setProperty("--grid-size", gridSize);
+        gridElem.style.setProperty("--cell-size", `${cellSize}vmin`);
+        gridElem.style.setProperty("--cell-gap", `${cellGap}vmin`);
+
+        this.#cells = createCellElements(gridElem, gridSize).map(
+          (cell, index) => {
+            return new Cell(
+              cell,
+              index % gridSize,
+              Math.floor(index / gridSize)
+            );
+          }
+        );
+
+        this.#size = gridSize;
+        this.#startTiles = 2;
+
+        this.#score = 0;
+        this.#maxPoint = 0;
+
+        this.playerTurn = true;
+      }
+
+      get playerTurn() {
+        return this.#playerTurn;
+      }
+
+      set playerTurn(val) {
+        this.#playerTurn = val;
+      }
+
+      get playerTurn() {
+        return this.#playerTurn;
+      }
+      set playerTurn(val) {
+        this.#playerTurn = val;
+      }
+
+      get size() {
+        return this.#size;
+      }
+
+      get maxPoint() {
+        return this.#maxPoint;
+      }
+
+      set maxPoint(val) {
+        this.#maxPoint = val;
+      }
+
+      get score() {
+        return this.#score;
+      }
+
+      set score(val) {
+        this.#score = val;
+      }
+
+      get cells() {
+        return this.#cells;
+      }
+
+      get cellsByColumn() {
+        return this.#cells.reduce((cellGrid, cell) => {
+          cellGrid[cell.x] = cellGrid[cell.x] || [];
+          cellGrid[cell.x][cell.y] = cell;
+          return cellGrid;
+        }, []);
+      }
+
+      get cellsByRow() {
+        return this.#cells.reduce((cellGrid, cell) => {
+          cellGrid[cell.y] = cellGrid[cell.y] || [];
+          cellGrid[cell.y][cell.x] = cell;
+          return cellGrid;
+        }, []);
+      }
+
+      get emptyCells() {
+        return this.#cells.filter((cell) => cell.tile == null);
+      }
+
+      randomEmptyCell() {
+        const randomIndex = Math.floor(Math.random() * this.emptyCells.length);
+        return this.emptyCells[randomIndex];
+      }
+
+      moveTilesUp() {
+        return this.#moveTiles(this.cellsByColumn);
+      }
+
+      moveTilesDown() {
+        return this.#moveTiles(
+          this.cellsByColumn.map((column) => [...column].reverse())
+        );
+      }
+
+      moveTilesLeft() {
+        return this.#moveTiles(this.cellsByRow);
+      }
+
+      moveTilesRight() {
+        return this.#moveTiles(
+          this.cellsByRow.map((row) => [...row].reverse())
+        );
+      }
+
+      clone(grid, diff) {
+        const clonedGrid = new Grid(grid, diff);
+
+        clonedGrid.#cells = this.#cells.map((cell) => {
+          const clonedCell = new Cell(
+            cell.cellElement.cloneNode(),
+            cell.x,
+            cell.y
+          );
+          clonedCell.tile = cell.tile ? new Tile(grid, diff) : null;
+          clonedCell.mergeTile = cell.mergeTile
+            ? new Tile(cell.mergeTile.value)
+            : null;
+          return clonedCell;
+        });
+
+        clonedGrid.#size = this.#size;
+        clonedGrid.#startTiles = this.#startTiles;
+        clonedGrid.#score = this.#score;
+        clonedGrid.#maxPoint = this.#maxPoint;
+        clonedGrid.playerTurn = this.playerTurn;
+
+        return clonedGrid;
+      }
+
+      async #moveTiles(cells) {
+        await Promise.all(
+          cells.flatMap((group) => {
+            const promises = [];
+            for (let i = 1; i < group.length; i++) {
+              const cell = group[i];
+              if (cell.tile == null) continue;
+              let lastValidCell;
+              for (let j = i - 1; j >= 0; j--) {
+                const moveToCell = group[j];
+                if (!moveToCell.canAccept(cell.tile)) break;
+                lastValidCell = moveToCell;
+              }
+              if (lastValidCell != null) {
+                promises.push(cell.tile.waitForTransition());
+                if (lastValidCell.tile != null) {
+                  lastValidCell.mergeTile = cell.tile;
+                } else {
+                  lastValidCell.tile = cell.tile;
+                }
+                cell.tile = null;
+              }
+            }
+            return promises;
+          })
+        );
+
+        const additionalScore = this.cells.reduce((sum, cell) => {
+          if (cell.mergeTile == null || cell.tile == null) return sum;
+          return sum + cell.mergeTile.value + cell.tile.value;
+        }, 0);
+
+        this.cells.forEach((cell) => cell.mergeTiles());
+        return additionalScore;
+      }
+
+      canMoveTilesAnyDirection() {
+        return (
+          this.canMoveTilesUp() ||
+          this.canMoveTilesDown() ||
+          this.canMoveTilesLeft() ||
+          this.canMoveTilesRight()
+        );
+      }
+
+      isLose() {
+        return (
+          !this.canMoveTilesUp() &&
+          !this.canMoveTilesDown() &&
+          !this.canMoveTilesLeft() &&
+          !this.canMoveTilesRight()
+        );
+      }
+
+      canMove(direction) {
+        if (direction === 0) {
+          return this.canMoveTilesUp;
+        }
+        if (direction === 1) {
+          return this.canMoveTilesRight;
+        }
+        if (direction === 2) {
+          return this.canMoveTilesDown;
+        }
+        if (direction === 3) {
+          return this.canMoveTilesLeft;
+        }
+      }
+
+      isWin() {
+        return this.maxPoint === 2048;
+      }
+
+      canMoveTilesUp() {
+        return this.#canMoveTiles(this.cellsByColumn);
+      }
+
+      canMoveTilesDown() {
+        return this.#canMoveTiles(
+          this.cellsByColumn.map((column) => [...column].reverse())
+        );
+      }
+
+      canMoveTilesLeft() {
+        return this.#canMoveTiles(this.cellsByRow);
+      }
+
+      canMoveTilesRight() {
+        return this.#canMoveTiles(
+          this.cellsByRow.map((row) => [...row].reverse())
+        );
+      }
+
+      #canMoveTiles(cells) {
+        return cells.some((group) => {
+          return group.some((cell, index) => {
+            if (index === 0) return false;
+            if (cell.tile == null) return false;
+            const moveToCell = group[index - 1];
+            return moveToCell.canAccept(cell.tile);
+          });
+        });
+      }
+
+      moveTiles(direction) {
+        switch (direction) {
+          case "ArrowUp":
+          case "k":
+          case "w":
+            if (!this.canMoveTilesUp()) throw new InvalidMoveError();
+            return this.moveTilesUp();
+          case "ArrowDown":
+          case "j":
+          case "s":
+            if (!this.canMoveTilesDown()) throw new InvalidMoveError();
+            return this.moveTilesDown();
+          case "ArrowLeft":
+          case "h":
+          case "a":
+            if (!this.canMoveTilesLeft()) throw new InvalidMoveError();
+            return this.moveTilesLeft();
+          case "ArrowRight":
+          case "l":
+          case "d":
+            if (!this.canMoveTilesRight()) throw new InvalidMoveError();
+            return this.moveTilesRight();
+          default:
+            throw new InvalidMoveError();
+        }
+      }
+
+      smoothness() {
+        let smoothness = 0;
+
+        // Calculate the sum of pairwise differences between neighboring tiles
+        this.cells.forEach((cell) => {
+          const neighbors = this.getNeighbors(cell);
+          neighbors.forEach((neighbor) => {
+            if (cell.tile && neighbor.tile) {
+              const diff = Math.abs(
+                Math.log2(cell.tile.value) - Math.log2(neighbor.tile.value)
+              );
+              smoothness += diff;
+            }
+          });
+        });
+
+        return smoothness;
+      }
+
+      getNeighbors(cell) {
+        const neighbors = [];
+
+        const topNeighbor = this.getCellByPosition(cell.x, cell.y - 1);
+        if (topNeighbor) neighbors.push(topNeighbor);
+
+        const bottomNeighbor = this.getCellByPosition(cell.x, cell.y + 1);
+        if (bottomNeighbor) neighbors.push(bottomNeighbor);
+
+        const leftNeighbor = this.getCellByPosition(cell.x - 1, cell.y);
+        if (leftNeighbor) neighbors.push(leftNeighbor);
+
+        const rightNeighbor = this.getCellByPosition(cell.x + 1, cell.y);
+        if (rightNeighbor) neighbors.push(rightNeighbor);
+
+        return neighbors;
+      }
+
+      getCellByPosition(x, y) {
+        if (x < 0 || x >= this.size || y < 0 || y >= this.size) {
+          return null; // Neighbor is outside the grid
+        }
+        return this.cellsByRow[y][x];
+      }
+
+      monotonicity() {
+        var totals = [0, 0, 0, 0];
+
+        // Up/Down direction
+        for (var x = 0; x < this.size; x++) {
+          var current = 0;
+          var next = current + 1;
+          while (next < this.size) {
+            while (next < this.size && !this.cellsByColumn[x][next].tile) {
+              next++;
+            }
+            if (next >= this.size) {
+              next--;
+            }
+            var currentValue = this.cellsByColumn[x][current].tile
+              ? Math.log2(this.cellsByColumn[x][current].tile.value)
+              : 0;
+            var nextValue = this.cellsByColumn[x][next].tile
+              ? Math.log2(this.cellsByColumn[x][next].tile.value)
+              : 0;
+            if (currentValue > nextValue) {
+              totals[0] += nextValue - currentValue;
+            } else if (nextValue > currentValue) {
+              totals[1] += currentValue - nextValue;
+            }
+            current = next;
+            next++;
+          }
+        }
+
+        // Left/Right direction
+        for (var y = 0; y < this.size; y++) {
+          var current = 0;
+          var next = current + 1;
+          while (next < this.size) {
+            while (next < this.size && !this.cellsByRow[y][next].tile) {
+              next++;
+            }
+            if (next >= this.size) {
+              next--;
+            }
+            var currentValue = this.cellsByRow[y][current].tile
+              ? Math.log2(this.cellsByRow[y][current].tile.value)
+              : 0;
+            var nextValue = this.cellsByRow[y][next].tile
+              ? Math.log2(this.cellsByRow[y][next].tile.value)
+              : 0;
+            if (currentValue > nextValue) {
+              totals[2] += nextValue - currentValue;
+            } else if (nextValue > currentValue) {
+              totals[3] += currentValue - nextValue;
+            }
+            current = next;
+            next++;
+          }
+        }
+
+        return Math.max(totals[0], totals[1]) + Math.max(totals[2], totals[3]);
+      }
+
+      islands() {
+        // Create a 2D matrix to track visited tiles
+        const visited = Array.from({ length: this.size }, () =>
+          Array(this.size).fill(false)
+        );
+
+        let islandCount = 0;
+
+        // Perform a depth-first search (DFS) on each tile
+        for (let row = 0; row < this.size; row++) {
+          for (let col = 0; col < this.size; col++) {
+            if (!visited[row][col]) {
+              const tile = this.grid[row][col];
+              if (tile !== null) {
+                islandCount++;
+                this.dfs(row, col, visited);
+              }
+            }
+          }
+        }
+
+        return islandCount;
+      }
+
+      dfs(row, col, visited) {
+        // Define the four possible directions: up, right, down, left
+        const directions = [
+          [-1, 0],
+          [0, 1],
+          [1, 0],
+          [0, -1],
+        ];
+
+        visited[row][col] = true;
+
+        for (const [dx, dy] of directions) {
+          const newRow = row + dx;
+          const newCol = col + dy;
+
+          // Check if the new coordinates are within the grid bounds
+          if (
+            newRow >= 0 &&
+            newRow < this.size &&
+            newCol >= 0 &&
+            newCol < this.size
+          ) {
+            // Check if the adjacent tile is part of the same island and not visited
+            if (
+              !visited[newRow][newCol] &&
+              this.grid[newRow][newCol] !== null
+            ) {
+              this.dfs(newRow, newCol, visited);
+            }
+          }
+        }
+      }
+    }
+
+    class Cell {
+      #cellElement;
+      #x;
+      #y;
+      #tile;
+      #mergeTile;
+
+      constructor(cellElement, x, y) {
+        this.#cellElement = cellElement;
+        this.#x = x;
+        this.#y = y;
+      }
+
+      get cellElement() {
+        return this.#cellElement;
+      }
+
+      set cellElement(val) {
+        this.#cellElement = val;
+      }
+
+      get tile() {
+        return this.#tile;
+      }
+
+      set tile(val) {
+        this.#tile = val;
+      }
+
+      set tile(value) {
+        this.#tile = value;
+        if (value == null) return;
+        this.#tile.x = this.#x;
+        this.#tile.y = this.#y;
+      }
+
+      get x() {
+        return this.#x;
+      }
+
+      get y() {
+        return this.#y;
+      }
+
+      get mergeTile() {
+        return this.#mergeTile;
+      }
+
+      set mergeTile(value) {
+        this.#mergeTile = value;
+        if (value == null) return;
+        this.#mergeTile.x = this.#x;
+        this.#mergeTile.y = this.#y;
+      }
+
+      canAccept(tile) {
+        return (
+          this.tile == null ||
+          (this.mergeTile == null && this.tile.value === tile.value)
+        );
+      }
+
+      mergeTiles(grid) {
+        if (this.tile == null || this.mergeTile == null) return;
+
+        const scoreToAdd = this.tile.value + this.mergeTile.value;
+        grid.score += scoreToAdd;
+
+        if (scoreToAdd > grid.maxPoint) {
+          grid.maxPoint = scoreToAdd;
+          // console.log(grid.maxPoint);
+        }
+
+        this.tile.value += this.mergeTile.value;
+
+        this.mergeTile.remove();
+        this.mergeTile = null;
+      }
+    }
+
+    function createCellElements(gridElement, gridSize) {
+      const cells = [];
+
+      for (let i = 0; i < gridSize * gridSize; i++) {
+        const cell = document.createElement("div");
+        cell.classList.add("cell");
+        cells.push(cell);
+        gridElement.append(cell);
+      }
+
+      return cells;
+    }
+
+    class Tile {
+      #tileElement;
+      #x;
+      #y;
+      #value;
+
+      constructor(tileContainer, diff) {
+        let num1 = 0;
+        let num2 = 0;
+        if (diff === 0) {
+          num1 = 8;
+          num2 = 16;
+        }
+        if (diff === 1) {
+          num1 = 4;
+          num2 = 8;
+        }
+        if (diff === 2) {
+          num1 = 2;
+          num2 = 4;
+        }
+
+        // console.log(num1);
+        // console.log(num2);
+
+        let val = Math.random() > 0.1 ? num1 : num2;
+        this.#tileElement = document.createElement("div");
+        this.#tileElement.classList.add("tile");
+        tileContainer.append(this.#tileElement);
+        this.value = val;
+
+        // console.log(this.#tileElement)
+      }
+
+      get value() {
+        return this.#value;
+      }
+
+      clone() {
+        const clonedTile = new Tile(null, null);
+
+        clonedTile.#tileElement = this.#tileElement.cloneNode();
+        clonedTile.#x = this.#x;
+        clonedTile.#y = this.#y;
+        clonedTile.#value = this.#value;
+
+        return clonedTile;
+      }
+
+      set value(val) {
+        this.#value = val;
+        this.#tileElement.textContent = val;
+        const power = Math.log2(val);
+        const bgLightness = 100 - power * 9;
+        this.#tileElement.style.setProperty(
+          "--background-lightness",
+          `${bgLightness}%`
+        );
+        this.#tileElement.style.setProperty(
+          "--text-lightness",
+          `${bgLightness <= 50 ? 90 : 10}%`
+        );
+      }
+
+      set x(value) {
+        this.#x = value;
+        this.#tileElement.style.setProperty("--x", value);
+      }
+
+      set y(value) {
+        this.#y = value;
+        this.#tileElement.style.setProperty("--y", value);
+      }
+
+      remove() {
+        this.#tileElement.remove();
+      }
+
+      waitForTransition() {
+        return new Promise((resolve) => {
+          this.#tileElement.addEventListener("transitionend", resolve, {
+            once: true,
+          });
+        });
+      }
+      get x() {
+        return this.#x;
+      }
+
+      get y() {
+        return this.#y;
+      }
+    }
+
+    class InvalidMoveError extends Error {
+      constructor(...params) {
+        super(...params);
+
+        this.name = "InvalidMoveError";
+      }
+    }
+  </script>
 </html>
