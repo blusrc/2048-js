@@ -105,3 +105,29 @@ header > * {
     transform: scale(0);
   }
 }
+
+#game-end-scene {
+  background-color: #333;
+  color: #fafafa;
+  border: none;
+  padding: 10vmin;
+  border-radius: 2vmin;
+  gap: 4vmin;
+}
+
+#game-end-scene > h1 {
+  font-size: 6vmin;
+}
+
+.modal-scores {
+  display: flex;
+  width: 100%;
+  gap: 10vmin;
+  justify-content: space-between;
+}
+
+#close-game-end-scene {
+  margin-top: 4vmin;
+  padding: 2vmin 6vmin;
+  font-size: 3vmin;
+}

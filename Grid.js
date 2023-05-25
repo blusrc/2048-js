@@ -5,6 +5,7 @@ const DEFAULT_CELL_GAP = 2;
 export default class Grid {
   #cells;
   #score;
+  #maxPoint;
 
   constructor(
     gridElem,
@@ -23,6 +24,15 @@ export default class Grid {
       return new Cell(cell, index % gridSize, Math.floor(index / gridSize));
     });
     this.#score = 0;
+    this.#maxPoint = 0;
+  }
+
+  get maxPoint() {
+    return this.#maxPoint;
+  }
+
+  set maxPoint(val) {
+    this.#maxPoint = val;
   }
 
   get score() {
@@ -118,6 +128,12 @@ class Cell {
 
     const scoreToAdd = this.tile.value + this.mergeTile.value;
     grid.score += scoreToAdd;
+
+    if (scoreToAdd > grid.maxPoint) {
+      grid.maxPoint = scoreToAdd;
+      console.log(grid.maxPoint);
+    }
+
     this.tile.value += this.mergeTile.value;
 
     this.mergeTile.remove();

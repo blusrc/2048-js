@@ -2,16 +2,25 @@ import Grid from "./Grid.js";
 import Tile from "./Tile.js";
 
 const gameBoard = document.getElementById("game-board");
+const gameEnd = document.getElementById("game-end-scene");
+const gameEndTitle = document.getElementById("game-end-title");
 const difficulty = 1;
 const scoreCount = document.getElementById("score-count");
+const gameEndCloseBtn = document.getElementById("close-game-end-scene");
+const gameEndScoreCount = document.getElementById("game-end-score");
+const gameEndTimer = document.getElementById("game-end-timer");
+
+// testing modal
+// gameEnd.showModal();
 
 let startTime;
 let elapsedSeconds = 0;
+let timerGlob = "";
 const timerElement = document.getElementById("timer");
 
 const grid = new Grid(gameBoard, difficulty);
-grid.randomEmptyCell().tile = new Tile(gameBoard);
-grid.randomEmptyCell().tile = new Tile(gameBoard);
+grid.randomEmptyCell().tile = new Tile(gameBoard, difficulty);
+grid.randomEmptyCell().tile = new Tile(gameBoard, difficulty);
 
 let idle = true;
 setupInput();
@@ -19,6 +28,11 @@ setupInput();
 function setupInput() {
   window.addEventListener("keydown", handleInput, { once: true });
 }
+
+gameEndCloseBtn.addEventListener("click", () => {
+  console.log("closing modal");
+  gameEnd.close();
+});
 
 async function handleInput(e) {
   switch (e.key) {
@@ -67,13 +81,25 @@ async function handleInput(e) {
   //   console.log(grid.score);
   scoreCount.textContent = grid.score;
 
-  const newTile = new Tile(gameBoard);
+  const newTile = new Tile(gameBoard, difficulty);
   grid.randomEmptyCell().tile = newTile;
 
   if (!canMoveUp() && !canMoveDown() && !canMoveRight() && !canMoveLeft()) {
     console.log("lost");
-    alert("you lose");
+    idle = !idle;
+    gameEndTitle.textContent = "Game over! 🥲";
+    gameEndScoreCount.textContent = grid.score;
+    gameEndTimer.textContent = timerGlob;
+    // gameEnd.showModal();
     return;
+  }
+
+  if (grid.maxPoint === 2048) {
+    idle = !idle;
+    gameEndTitle.textContent = "Victory! 🏆";
+    gameEndScoreCount.textContent = grid.score;
+    gameEndTimer.textContent = timerGlob;
+    // gameEnd.showModal();
   }
 
   setupInput();
@@ -164,9 +190,12 @@ function updateTimer() {
 
   // Update the timer element with the elapsed time
   timerElement.textContent = formatTime(elapsedSeconds);
+  timerGlob = timerElement.textContent;
+
+  console.log(elapsedSeconds);
 
   // Schedule the next update
-  requestAnimationFrame(updateTimer);
+  if (idle === false) requestAnimationFrame(updateTimer);
 }
 
 function formatTime(seconds) {
